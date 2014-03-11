@@ -59,9 +59,10 @@ class RailsBuilder
 
       regex = /  #( root 'welcome#index')/
 
-      if buffer[regex] then      
+      if buffer[regex] or not buffer[/root #{root}/] then      
         puts ':: updating ' + routes
-        File.write routes, buffer.sub(regex, ' \1').sub('welcome#index',root)
+        File.write routes, buffer.sub(regex, ' \1')\
+                        .sub(/'[^']+'/,"'" + root + "'")
       end
     end
 
