@@ -13,7 +13,7 @@ class RailsBuilder
 
   def initialize(filepath=nil)
 
-    buffer = File.read filepath if filepath
+    buffer = File.read File.expand_path(filepath) if filepath
 
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
