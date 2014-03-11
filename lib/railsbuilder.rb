@@ -34,8 +34,11 @@ class RailsBuilder
   def build()
 
     @app = @h[:app][0][1][':app']
+    app_path = @h[:app][0][1][':app_path']
+    Dir.chdir app_path if app_path
 
     unless File.exists? @app then
+
       command = 'rails new ' + @app
       puts ":: preparing to execute shell command: `#{command}`"
       puts 'Are you sure you want to build a new app? (Y/n)'
@@ -46,6 +49,21 @@ class RailsBuilder
     Dir.chdir @app
 
     # select the :resource records
+    root = @h[:root][0][1][":root"]
+
+    if root then
+
+      # check if the config/routes.rb file needs updated
+      routes = File.join('config','routes.rb')
+      buffer = File.read routes
+
+      regex = /  #( root 'welcome#index')/
+
+      if buffer[regex] then      
+        puts ':: updating ' + routes
+        File.write routes, buffer.sub(regex, ' \1').sub('welcome#index',root)
+      end
+    end
 
     @h[:resource].each do |raw_resource|
 
@@ -104,6 +122,7 @@ app: #{dir}
 # resources: posts
 EOF
     end
+
     @config = s
     a = LineParser.new(patterns).parse s
     a.group_by(&:first)
