@@ -9,7 +9,7 @@ require 'lineparser'
 
 class RailsBuilder
   
-  attr_reader :to_a
+  attr_reader :to_h
 
   def initialize(filepath=nil)
 
@@ -18,22 +18,22 @@ class RailsBuilder
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
       [:root, 'app: :app', :app],
+      [:root, 'root: :root', :root],
       [:root, 'resources: :resources', :resources],
       [:root, ':resource', :resource],
         [:resource, 'model', :model],
           [:model, ':class_name', :model_class],
-        [:resource, 'controller + views', :resource_cv],
+        [:resource, /controller \+ views/, :resource_cv],
           [:resource_cv, /(\w+)\s+[av]{1,2}/, :resource_cv_av],
-      [:all, /#/]
+      [:all, /^\s*#/, :comment]
     ]
 
-    @to_a = @a = parse(patterns, buffer)
+    @to_h = @h = parse(patterns, buffer)
   end
 
   def build()
 
-    cols = @a[:root].select {|x| x[1].has_key? ':app' }
-    @app = cols[0][1][':app']
+    @app = @h[:app][0][1][':app']
 
     unless File.exists? @app then
       command = 'rails new ' + @app
@@ -41,25 +41,25 @@ class RailsBuilder
       puts 'Are you sure you want to build a new app? (Y/n)'
 
       shell command
-    else
-      Dir.chdir @app
     end
+
+    Dir.chdir @app
 
     # select the :resource records
 
-    @a[:root].select{|x| x[1][":resource"]}.each do |raw_resource|
+    @h[:resource].each do |raw_resource|
 
-      resource_child = raw_resource[3][0][3]
+      resource_child = raw_resource[3][0]
       resource = raw_resource[1][":resource"]
 
-      case resource_child[0][0]
+      case resource_child[0]
 
-        when :model
+        when :model_class
           puts "it's a model"
         when :resource_cv
 
           # fetch the action name
-          action = resource_child[0][1][:captures][0]
+          action = resource_child[3][0][1][:captures][0]
           page = action + '.html.erb'
       
           unless File.exists? File.join('app','views', resource, page) then
@@ -74,7 +74,6 @@ class RailsBuilder
       end
     end
 
-    @h
   end
 
   def save()
