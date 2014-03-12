@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'railsbuilder'
-  s.version = '0.1.7'
+  s.version = '0.1.8'
   s.summary = 'Builds a Rails app from a configuration file.'
   s.authors = ['James Robertson']
   s.files = Dir['lib/**/*.rb']

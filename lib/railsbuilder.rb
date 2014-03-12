@@ -21,6 +21,7 @@ class RailsBuilder
       [:root, ':resource', :resource],
         [:resource, 'model', :model],
           [:model, ':class_name', :model_class],
+            [:model_class, /(\w+):\s*(string|text)/, :class_attribute],
         [:resource, /controller \+ views/, :resource_cv],
           [:resource_cv, /(\w+)(?:\s+[av]{1,2})?/, :resource_cv_av],
       [:all, /^\s*#/, :comment]
@@ -71,7 +72,8 @@ class RailsBuilder
       end
     end
 
-    resources = doc.element('resources/@resources')    
+    resources = doc.element('resources/@resources')
+    puts 'resources :'  + resources.inspect
 
     if resources then
 
@@ -90,7 +92,6 @@ class RailsBuilder
 
       resource = node.attributes[:resource]
 
-      puts 'resource : ' + resource.inspect
       next unless resource
 
       controller = resource + '_controller.rb'
@@ -113,6 +114,28 @@ class RailsBuilder
               shell command            
             end
 
+            # if the model fields are defined let's generate the model
+            model = child.element('model_class')
+
+            class_name = model.attributes[:class_name]
+            attributes = model.xpath('.').map {|x| x.attributes.values}
+            s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
+
+            command = "rails generate model %s" % s
+            puts ":: preparing to execute shell command: `#{command}`"
+            puts 'Are you sure you want to generate a model? (Y/n)'
+
+            shell command
+
+            # -- next command ---------------------
+
+            command = "rake db:migrate"     
+
+            puts ":: preparing to execute shell command: `#{command}`"
+            puts 'Are you sure you want to commit this database operation? (Y/n)'
+
+            shell command
+
           when :resource_cv
 
             # fetch the action name
@@ -122,7 +145,7 @@ class RailsBuilder
 
               page = action + '.html.erb'
               view_file = File.join('app','views', resource, page)
-          
+
               #   if the controller exists don't try to generate the view,
               # instead add the entry to the controller file and
               # create the view file
@@ -133,12 +156,24 @@ class RailsBuilder
                 buffer = File.read controller_file
 
                 regex = /class \w+Controller < ApplicationController/
-                buffer.sub!(regex) {|x|  x + "\n\n  def new\n  end\n" }
-                File.write controller_file, buffer
-                puts ':: updated ' + controller
-      
-                File.write view_file, ''
-                puts ':: created ' + page
+
+                unless File.exists? view_file then
+                  File.write view_file, ''
+                  puts ':: created ' + page
+                end
+
+                child.elements.each do |av|
+
+                  action = av.attributes[:captures0]
+                  next unless action
+                  page = action + '.html.erb'
+
+                  unless buffer[/\bdef #{action}/] then
+                    buffer.sub!(regex) {|x|  x + "\n  def #{action}\n  end\n" }
+                    File.write controller_file, buffer
+                    puts ':: updated ' + controller
+                  end
+                end      
 
               else
 
