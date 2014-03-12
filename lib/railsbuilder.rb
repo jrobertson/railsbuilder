@@ -116,9 +116,14 @@ class RailsBuilder
 
             # if the model fields are defined let's generate the model
             model = child.element('model_class')
+            next unless model
 
             class_name = model.attributes[:class_name]
+            next unless class_name
+
             attributes = model.xpath('.').map {|x| x.attributes.values}
+            next unless attributes.empty?
+
             s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
 
             command = "rails generate model %s" % s
