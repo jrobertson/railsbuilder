@@ -6,10 +6,13 @@ require 'fileutils'
 require 'io/console'
 require 'lineparser'
 require 'rdiscount'
+require 'yaml'
 
 
 class RailsBuilder
   
+  attr_accessor :notifications
+
   def initialize(filepath=nil)
 
     buffer = File.read File.expand_path(filepath) if filepath
@@ -31,17 +34,19 @@ class RailsBuilder
     ]
 
     parse(patterns, buffer.gsub(/^(\s{,5})#/,'\1;'))
+    @parent_path = Dir.pwd
+    @notifications = []
+  
   end
 
   def build()
 
     doc = self.to_doc.root
-
+  
     @app = app = doc.element('app/@app')
     return unless app
-
+    
     app_path = doc.element('app_path/@app_path')
-
     Dir.chdir app_path if app_path
 
     unless File.exists? app then
@@ -51,6 +56,11 @@ class RailsBuilder
       puts 'Are you sure you want to build a new app? (Y/n)'
 
       shell command
+
+      trigger = "config: new app entry found which doesn't yet " \
+                                            + "exist as a file directory"
+      activity = "new Rails app created"
+      @notifications << [trigger,activity]
     end
 
     Dir.chdir app
@@ -69,9 +79,15 @@ class RailsBuilder
       regex = /  #( root 'welcome#index')/
 
       if buffer[regex] or not buffer[/root '#{root}'/] then      
+
         puts ':: updating ' + routes
         File.write routes, buffer.sub(regex, ' \1')\
                         .sub(/'[^']+'/,"'" + root + "'")
+
+        trigger = "config: new root added or changed"
+        activity = "file: config/routes.rb modified"
+        data = /^\s*root\s+'#{root}'/
+        @notifications << [trigger, activity, data]
       end
     end
 
@@ -87,12 +103,18 @@ class RailsBuilder
         File.write routes, buffer.sub(/\n  resources :\w+/,'')\
           .sub(/ #   resources :products/) \
             {|x| x + "\n  resources :#{resources}"}
+
+        trigger = "config: resources entry has been changed"
+        activity = "file: config/routes.rb modified"
+        data = /resources\s+:#{resources}/
+        @notifications << [trigger, activity, data]
       end
     end
 
     doc.xpath('resource').each do |node|
-
+      
       resource = node.attributes[:resource]
+
 
       next unless resource
 
@@ -114,6 +136,10 @@ class RailsBuilder
               puts 'Are you sure you want to generate a controller? (Y/n)'
 
               shell command            
+
+              trigger = "config: resources entry has been changed"
+              activity = "file: created app/controllers/posts_controller.rb"
+              @notifications << [trigger, activity]
             end
 
             # if the model fields are defined let's generate the model
@@ -135,14 +161,24 @@ class RailsBuilder
             r = shell command
             next if r == :abort
 
+            trigger = "config: a new model with associated entries has "
+                                                              + "been created"
+            activity = "file: created app/models/#{class_name.downcase}.rb"
+            @notifications << [trigger, activity]
+
             # -- next command ---------------------
 
             command = "rake db:migrate"     
 
             puts ":: preparing to execute shell command: `#{command}`"
-            puts 'Are you sure you want to commit this ' \
+            puts 'Are you sure you want to commit this ' 
                                               + 'database operation? (Y/n)'
             shell command
+
+            trigger = "config: a new model with associated entries has " 
+                                                              + "been created"
+            activity = "database: created"
+            @notifications << [trigger, activity]
 
           when :resource_cv
 
@@ -166,8 +202,15 @@ class RailsBuilder
                 regex = /class \w+Controller < ApplicationController/
 
                 unless File.exists? view_file then
+
                   File.write view_file, ''
                   puts ':: created ' + page
+
+                  trigger = "config: the 1st action has been "\
+                                              + "created in the controller"
+                  activity = "file: created " + view_file
+                  @notifications << [trigger, activity]
+
                 end
 
                 child.elements.each do |av|
@@ -177,9 +220,16 @@ class RailsBuilder
                   page = action + '.html.erb'
 
                   unless buffer[/\bdef #{action}/] then
+
                     buffer.sub!(regex) {|x|  x + "\n  def #{action}\n  end\n" }
                     File.write controller_file, buffer
                     puts ':: updated ' + controller
+
+                    trigger = "config: an action has been "\
+                                + "created in the controller + views section"
+                    activity = "file: updated " + controller_file
+                    data = /def #{action}/
+                    @notifications << [trigger, activity, data]
                   end
 
                   av_type = av.attributes[:captures1]
@@ -193,6 +243,12 @@ class RailsBuilder
                     unless File.exists? view_file then
                       File.write view_file, ''
                       puts ':: created ' + page
+
+                      trigger = "config: an action has been "\
+                                 + "created in the controller + views section"
+                      activity = "file: updated " + controller_file
+                      data = /def #{action}/
+                      @notifications << [trigger, activity, data]
                     end                   
 
                     # does it contain a renderer? e.g. markdown
@@ -219,6 +275,12 @@ class RailsBuilder
                       unless buffer[/#{html}/] then
                         File.write view_file, html + "\n" + buffer
                         puts ':: updated ' + view_file
+
+                        trigger = "config: a rendering block has been "\
+                                      + "created or modified for an action"
+                        activity = "file: updated " + view_file
+                        data = /#{html}/
+                        @notifications << [trigger, activity, data]
                       end
                     end
 
@@ -235,6 +297,14 @@ class RailsBuilder
                   puts 'Are you sure you want to generate a ' \
                                                 + 'controller action? (Y/n)'
                   shell command
+
+                  trigger = "config: a new action has been "\
+                         + "created in the controller + views section for a "\
+                         + "resource which doesn't have a model and the "\
+                         + "controller file doesn't yet exist."
+                  activity = "file: created " + controller_file
+                  @notifications << [trigger, activity]
+
                 end
               end
             end
@@ -243,6 +313,8 @@ class RailsBuilder
       end # / child iterator
     end
 
+    Dir.chdir @parent_path
+    @notifications.to_yaml
   end
 
   def save()
