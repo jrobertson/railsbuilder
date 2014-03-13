@@ -5,6 +5,7 @@
 require 'fileutils'
 require 'io/console'
 require 'lineparser'
+require 'rdiscount'
 
 
 class RailsBuilder
@@ -24,10 +25,12 @@ class RailsBuilder
             [:model_class, /(\w+):\s*(string|text)/, :class_attribute],
         [:resource, /controller \+ views/, :resource_cv],
           [:resource_cv, /(\w+)(?:\s+([av]{1,2}))?/, :resource_cv_av],
-      [:all, /^\s*#/, :comment]
+            [:resource_cv_av, /(markdown):\s*(.*)/, :renderer],
+              [:renderer, /.*/, :render_block],
+      [:all, /^\s*;/, :comment]
     ]
 
-    parse(patterns, buffer)
+    parse(patterns, buffer.gsub(/^(\s{,5})#/,'\1;'))
   end
 
   def build()
@@ -73,7 +76,6 @@ class RailsBuilder
     end
 
     resources = doc.element('resources/@resources')
-    puts 'resources :'  + resources.inspect
 
     if resources then
 
@@ -130,7 +132,8 @@ class RailsBuilder
             puts ":: preparing to execute shell command: `#{command}`"
             puts 'Are you sure you want to generate a model? (Y/n)'
 
-            shell command
+            r = shell command
+            next if r == :abort
 
             # -- next command ---------------------
 
@@ -191,6 +194,34 @@ class RailsBuilder
                       File.write view_file, ''
                       puts ':: created ' + page
                     end                   
+
+                    # does it contain a renderer? e.g. markdown
+                    renderer = av.element 'renderer'
+                    next unless renderer
+
+                    type, text = renderer.attributes.values
+                    #   open the related page and add the content if it
+                    # doesn't already exist
+
+                    render_block = renderer.text('render_block')
+
+                    raw_text = if text and render_block then
+                      text + "\n" + render_block
+                    elsif text then text
+                    elsif render_block then render_block
+                    end
+                      
+                    if type == 'markdown' and raw_text then
+
+                      html = RDiscount.new(raw_text).to_html
+                      buffer = File.read view_file
+
+                      unless buffer[/#{html}/] then
+                        File.write view_file, html + "\n" + buffer
+                        puts ':: updated ' + view_file
+                      end
+                    end
+
                   end
                 end      
 
@@ -258,6 +289,7 @@ EOF
       IO.popen(command).each_line {|x| print "", x}
     else
       puts 'Abort'
+      :abort
     end
   end
 end
