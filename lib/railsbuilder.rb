@@ -23,7 +23,7 @@ class RailsBuilder
           [:model, ':class_name', :model_class],
             [:model_class, /(\w+):\s*(string|text)/, :class_attribute],
         [:resource, /controller \+ views/, :resource_cv],
-          [:resource_cv, /(\w+)(?:\s+[av]{1,2})?/, :resource_cv_av],
+          [:resource_cv, /(\w+)(?:\s+([av]{1,2}))?/, :resource_cv_av],
       [:all, /^\s*#/, :comment]
     ]
 
@@ -137,8 +137,8 @@ class RailsBuilder
             command = "rake db:migrate"     
 
             puts ":: preparing to execute shell command: `#{command}`"
-            puts 'Are you sure you want to commit this database operation? (Y/n)'
-
+            puts 'Are you sure you want to commit this ' \
+                                              + 'database operation? (Y/n)'
             shell command
 
           when :resource_cv
@@ -178,16 +178,31 @@ class RailsBuilder
                     File.write controller_file, buffer
                     puts ':: updated ' + controller
                   end
+
+                  av_type = av.attributes[:captures1]
+                  next unless av_type
+
+                  if av_type[/v/] then
+
+                    page = action + '.html.erb'
+                    view_file = File.join('app','views', resource, page)
+
+                    unless File.exists? view_file then
+                      File.write view_file, ''
+                      puts ':: created ' + page
+                    end                   
+                  end
                 end      
 
               else
 
                 unless File.exists? view_file then
 
-                  command = "rails generate controller %s %s" % [resource, action]
+                  command = "rails generate controller %s %s" % 
+                                                          [resource, action]
                   puts ":: preparing to execute shell command: `#{command}`"
-                  puts 'Are you sure you want to generate a controller action? (Y/n)'
-
+                  puts 'Are you sure you want to generate a ' \
+                                                + 'controller action? (Y/n)'
                   shell command
                 end
               end
@@ -233,8 +248,7 @@ EOF
     end
 
     @config = s
-    @lp = LineParser.new(patterns)
-    @lp.parse s
+    @lp = LineParser.new(patterns, s)
 
   end
 
