@@ -7,6 +7,7 @@ require 'io/console'
 require 'lineparser'
 require 'rdiscount'
 require 'yaml'
+require 'rxfhelper'
 
 
 class RailsBuilder
@@ -15,7 +16,7 @@ class RailsBuilder
 
   def initialize(filepath=nil)
 
-    buffer = File.read File.expand_path(filepath) if filepath
+    buffer, _ = RXFHelper.read(filepath) if filepath
 
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
@@ -33,15 +34,18 @@ class RailsBuilder
       [:all, /^\s*;/, :comment]
     ]
 
-    parse(patterns, buffer.gsub(/^(\s{,5})#/,'\1;'))
+    xml = parse(patterns, buffer.gsub(/^(\s{,5})#/,'\1;'))
+    @doc = Rexle.new xml
+
     @parent_path = Dir.pwd
     @notifications = []
   
   end
 
-  def build()
+  def build(auto: false)
 
-    doc = self.to_doc.root
+    doc = @doc.root
+    @auto_override = auto
   
     @app = app = doc.element('app/@app')
     return unless app
@@ -322,7 +326,7 @@ class RailsBuilder
   end
 
   def to_doc()
-    Rexle.new(@lp.to_xml)
+    @doc
   end
 
   private
@@ -351,13 +355,15 @@ EOF
     end
 
     @config = s
-    @lp = LineParser.new(patterns, s)
+    LineParser.new(patterns, s).to_xml
 
   end
 
   def shell(command)
 
-    if $stdin.getch[/y|\r/i] then
+    return system command if @auto_override
+
+    if $stdin.getch[/y|\r/i]then
       IO.popen(command).each_line {|x| print "", x}
     else
       puts 'Abort'
