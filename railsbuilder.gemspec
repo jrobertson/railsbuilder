@@ -8,6 +8,7 @@ Gem::Specification.new do |s|
   s.add_dependency('lineparser')
   s.add_dependency('rdiscount')
   s.add_dependency('rxfhelper')
+  s.add_dependency('activity-logger')
   s.signing_key = '../privatekeys/railsbuilder.pem'
   s.cert_chain  = ['gem-public_cert.pem']
   s.license = 'MIT'

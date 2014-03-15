@@ -8,15 +8,17 @@ require 'lineparser'
 require 'rdiscount'
 require 'yaml'
 require 'rxfhelper'
+require 'tmpdir'
+require 'activity-logger'
 
 
 class RailsBuilder
   
-  attr_accessor :notifications
 
-  def initialize(filepath=nil)
+  def initialize(filepath=nil, journal: false)
 
     buffer, _ = RXFHelper.read(filepath) if filepath
+    @tmp_path = @journal = journal == true ? Dir.tmpdir : journal if journal
 
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
@@ -50,9 +52,6 @@ class RailsBuilder
     @app = app = doc.element('app/@app')
     return unless app
     
-    app_path = doc.element('app_path/@app_path')
-    Dir.chdir app_path if app_path
-
     unless File.exists? app then
 
       command = 'rails new ' + app
@@ -67,7 +66,9 @@ class RailsBuilder
       @notifications << [trigger,activity]
     end
 
-    Dir.chdir app
+    @app_path = app_path = doc.element('app_path/@app_path') || 
+                                      File.join(@parent_path, app)
+    Dir.chdir app_path
 
     # select the :resource records
     root = doc.element('root/@root')
@@ -317,7 +318,12 @@ class RailsBuilder
       end # / child iterator
     end
 
+    snapshot() if @journal and @notifications.any?
     Dir.chdir @parent_path
+    @notifications.to_yaml
+  end
+
+  def notifications
     @notifications.to_yaml
   end
 
@@ -370,6 +376,18 @@ EOF
       :abort
     end
   end
+
+  def snapshot()    
+
+    d, t = Time.now.strftime("%d-%b").downcase, Time.now.strftime("%H%M_%S")
+    snapshot_path = File.join(@tmp_path, 'railsbuilder', @app, d,t)
+    FileUtils.mkdir_p snapshot_path
+
+    FileUtils.copy_entry @app_path, snapshot_path, preserve=true
+    al = ActivityLogger.new File.join(@tmp_path, 'railsbuilder', @app)
+    al.create File.join(d,t)
+  end
+
 end
 
 =begin
