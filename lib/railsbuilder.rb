@@ -17,7 +17,7 @@ class RailsBuilder
 
   def initialize(filepath=nil, journal: false)
 
-    buffer, _ = RXFHelper.read(filepath) if filepath
+    @config, _ = RXFHelper.read(filepath) if filepath
     @tmp_path = @journal = journal == true ? Dir.tmpdir : journal if journal
 
     patterns = [
@@ -36,7 +36,7 @@ class RailsBuilder
       [:all, /^\s*;/, :comment]
     ]
 
-    xml = parse(patterns, buffer.gsub(/^(\s{,5})#/,'\1;'))
+    xml = parse(patterns, @config.gsub(/^(\s{,5})#/,'\1;'))
     @doc = Rexle.new xml
 
     @parent_path = Dir.pwd
@@ -64,10 +64,14 @@ class RailsBuilder
                                             + "exist as a file directory"
       activity = "new Rails app created"
       @notifications << [trigger,activity]
+
+    else
+
     end
 
     @app_path = app_path = doc.element('app_path/@app_path') || 
-                                      File.join(@parent_path, app)
+                                           File.join(@parent_path, app)
+
     Dir.chdir app_path
 
     # select the :resource records
@@ -327,13 +331,33 @@ class RailsBuilder
     @notifications.to_yaml
   end
 
-  def save()
-    File.write "#{@app}.cfg", @config
+  def restore(level=-2)
+    
+    base = File.join(@tmp_path, 'railsbuilder', @app)
+    dx = Dynarex.new File.join(base, 'dynarexdaily.xml')
+    a = dx.all
+    return 'no restore points available' if a.length < 1
+
+    level = 0 if a.length < 2
+    record = a[level]
+    path = record.desc
+
+    FileUtils.rm_rf @app_path
+    FileUtils.copy_entry File.join(base, path), @app_path, preserve=true
+    record.delete
+    dx.save
+
+    path + ' app restored'
+  end
+
+  def save(filepath=@parent_path)
+    File.write File.join(filepath, "#{@app}.cfg"), @config
   end
 
   def to_doc()
     @doc
   end
+
 
   private
 
@@ -386,6 +410,8 @@ EOF
     FileUtils.copy_entry @app_path, snapshot_path, preserve=true
     al = ActivityLogger.new File.join(@tmp_path, 'railsbuilder', @app)
     al.create File.join(d,t)
+
+    self.save snapshot_path
   end
 
 end
