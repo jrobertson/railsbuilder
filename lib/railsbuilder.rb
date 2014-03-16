@@ -17,7 +17,7 @@ class RailsBuilder
 
   def initialize(filepath=nil, journal: false)
 
-    @config, _ = RXFHelper.read(filepath) if filepath
+    @config = RXFHelper.read(filepath)[0].gsub(/^(\s{,5})#/,'\1;') if filepath
     @tmp_path = @journal = journal == true ? Dir.tmpdir : journal if journal
 
     patterns = [
@@ -36,7 +36,7 @@ class RailsBuilder
       [:all, /^\s*;/, :comment]
     ]
 
-    xml = parse(patterns, @config.gsub(/^(\s{,5})#/,'\1;'))
+    xml = parse(patterns, @config)
     @doc = Rexle.new xml
 
     @parent_path = Dir.pwd
@@ -44,7 +44,7 @@ class RailsBuilder
   
   end
 
-  def build(auto: false)
+  def build(auto: false, desc: nil)
 
     doc = @doc.root
     @auto_override = auto
@@ -146,7 +146,7 @@ class RailsBuilder
 
               shell command            
 
-              trigger = "config: resources entry has been changed"
+              trigger = "config: model found for a controller which " + "doesn't yet exist"
               activity = "file: created app/controllers/posts_controller.rb"
               @notifications << [trigger, activity]
             end
@@ -322,7 +322,7 @@ class RailsBuilder
       end # / child iterator
     end
 
-    snapshot() if @journal and @notifications.any?
+    snapshot(desc) if @journal and @notifications.any?
     Dir.chdir @parent_path
     @notifications.to_yaml
   end
@@ -340,11 +340,11 @@ class RailsBuilder
 
     level = 0 if a.length < 2
     record = a[level]
-    path = record.desc
+    path = a[level].desc[/^[^;]+/]
 
     FileUtils.rm_rf @app_path
     FileUtils.copy_entry File.join(base, path), @app_path, preserve=true
-    record.delete
+    a.last.delete
     dx.save
 
     path + ' app restored'
@@ -401,15 +401,18 @@ EOF
     end
   end
 
-  def snapshot()    
+  def snapshot(desc=nil)    
 
-    d, t = Time.now.strftime("%d-%b").downcase, Time.now.strftime("%H%M_%S")
+    d = Time.now.strftime("%d-%b").downcase
+    t = Time.now.strftime("%H%M_%S.%2N")
     snapshot_path = File.join(@tmp_path, 'railsbuilder', @app, d,t)
     FileUtils.mkdir_p snapshot_path
 
     FileUtils.copy_entry @app_path, snapshot_path, preserve=true
     al = ActivityLogger.new File.join(@tmp_path, 'railsbuilder', @app)
-    al.create File.join(d,t)
+    s = File.join(d,t)
+    s << '; ' + desc if desc
+    al.create s
 
     self.save snapshot_path
   end
