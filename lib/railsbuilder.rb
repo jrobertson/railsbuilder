@@ -135,6 +135,7 @@ class RailsBuilder
         case child.name.to_sym
 
           when :model
+            puts 'inside :model'
 
             # does the controller exitst?
 
@@ -154,12 +155,16 @@ class RailsBuilder
             # if the model fields are defined let's generate the model
             model = child.element('model_class')
             next unless model
+            puts 'we have a model'
 
             class_name = model.attributes[:class_name]
             next unless class_name
+            puts 'we have a class name'
 
             attributes = model.xpath('.').map {|x| x.attributes.values}
-            next unless attributes.empty?
+            puts 'attributes : ' + attributes.inspect
+            next if attributes.empty?
+            puts 'we have attributes'
 
             s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
 
@@ -170,8 +175,8 @@ class RailsBuilder
             r = shell command
             next if r == :abort
 
-            trigger = "config: a new model with associated entries has "
-                                                              + "been created"
+            trigger = "config: a new model with associated entries has "\
+                                                              + "been found"
             activity = "file: created app/models/#{class_name.downcase}.rb"
             @notifications << [trigger, activity]
 
@@ -180,12 +185,11 @@ class RailsBuilder
             command = "rake db:migrate"     
 
             puts ":: preparing to execute shell command: `#{command}`"
-            puts 'Are you sure you want to commit this ' 
+            puts 'Are you sure you want to commit this '\
                                               + 'database operation? (Y/n)'
             shell command
 
-            trigger = "config: a new model with associated entries has " 
-                                                              + "been created"
+            trigger = "... continuation from previous trigger"
             activity = "database: created"
             @notifications << [trigger, activity]
 
