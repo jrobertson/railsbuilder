@@ -15,10 +15,10 @@ require 'activity-logger'
 class RailsBuilder
   
 
-  def initialize(s=nil, journal: false)
+  def initialize(filepath=nil, journal: false)
 
-    @config = RXFHelper.read(s)[0].gsub(/^(\s{,5})#/,'\1;') if s
-    @tmp_path = @journal = journal == true ? Dir.tmpdir : journal  if journal
+    @config = RXFHelper.read(filepath)[0].gsub(/^(\s{,5})#/,'\1;') if filepath
+    @tmp_path = @journal = journal == true ? Dir.tmpdir : journal if journal
 
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
@@ -29,7 +29,7 @@ class RailsBuilder
         [:resource, 'model', :model],
           [:model, ':class_name', :model_class],
             [:model_class, /(\w+):\s*(string|text)/, :class_attribute],
-        [:resource, /(?:controller \+ views|actionpack:)/, :resource_cv],
+        [:resource, /controller \+ views/, :resource_cv],
           [:resource_cv, /(\w+)(?:\s+([av]{1,2}))?/, :resource_cv_av],
             [:resource_cv_av, /(markdown):\s*(.*)/, :renderer],
               [:renderer, /.*/, :render_block],
@@ -124,16 +124,18 @@ class RailsBuilder
       
       resource = node.attributes[:resource]
 
+
       next unless resource
 
       controller = resource + '_controller.rb'
       controller_file = File.join('app','controllers', controller)
 
-      node.elements.each do |child|
+      node.each do |child|
 
         case child.name.to_sym
 
           when :model
+            puts 'inside :model'
 
             # does the controller exitst?
 
@@ -153,13 +155,16 @@ class RailsBuilder
             # if the model fields are defined let's generate the model
             model = child.element('model_class')
             next unless model
+            puts 'we have a model'
 
             class_name = model.attributes[:class_name]
             next unless class_name
+            puts 'we have a class name'
 
             attributes = model.xpath('.').map {|x| x.attributes.values}
-
+            puts 'attributes : ' + attributes.inspect
             next if attributes.empty?
+            puts 'we have attributes'
 
             s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
 
