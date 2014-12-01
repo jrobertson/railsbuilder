@@ -72,6 +72,7 @@ class RailsBuilder
     @app_path = app_path = doc.element('app_path/@app_path') || 
                                            File.join(@parent_path, app)
 
+    puts 'changing director to ' + app_path.inspect
     Dir.chdir app_path
 
     # select the :resource records
@@ -90,8 +91,7 @@ class RailsBuilder
       if buffer[regex] or not buffer[/root '#{root}'/] then      
 
         puts ':: updating ' + routes
-        File.write routes, buffer.sub(regex, ' \1')\
-                        .sub(/'[^']+'/,"'" + root + "'")
+        File.write routes, buffer.sub(regex, "  root '" + root + "'")
 
         trigger = "config: new root added or changed"
         activity = "file: config/routes.rb modified"
@@ -135,46 +135,73 @@ class RailsBuilder
 
           when :model
 
-            # does the controller exitst?
+            # if there is no controller entry then apply the scaffold command
+            if resource != '*' then
+              
+              # does the controller exitst?
+              unless File.exists? controller_file then
 
-            unless File.exists? controller_file then
+                command = "rails g controller %s" % resource
+                puts ":: preparing to execute shell command: `#{command}`"
+                puts 'Are you sure you want to generate a controller? (Y/n)'
 
-              command = "rails g controller %s" % resource
+                shell command            
+
+                trigger = "config: model found for a controller which " + "doesn't yet exist"
+                activity = "file: created app/controllers/posts_controller.rb"
+                @notifications << [trigger, activity]
+              end
+
+              # if the model fields are defined let's generate the model
+              model = child.element('model_class')
+              next unless model
+
+              class_name = model.attributes[:class_name]
+              next unless class_name
+
+              attributes = model.xpath('.').map {|x| x.attributes.values}
+
+              next if attributes.empty?
+
+              s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
+
+              command = "rails generate model %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
-              puts 'Are you sure you want to generate a controller? (Y/n)'
+              puts 'Are you sure you want to generate a model? (Y/n)'
+
+              r = shell command
+              next if r == :abort
+
+              trigger = "config: a new model with associated entries has "\
+                                                                + "been found"
+              activity = "file: created app/models/#{class_name.downcase}.rb"
+              @notifications << [trigger, activity]
+              
+            elsif not File.exists? controller_file then
+              
+              model = child.element('model_class')
+              next unless model
+
+              class_name = model.attributes[:class_name]
+              next unless class_name
+
+              attributes = model.xpath('.').map {|x| x.attributes.values}
+
+              next if attributes.empty?
+
+              s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')                            
+
+              command = "rails generate scaffold %s" % s
+              puts ":: preparing to execute shell command: `#{command}`"
+              puts 'Are you sure you want to generate a scaffold? (Y/n)'
 
               shell command            
 
-              trigger = "config: model found for a controller which " + "doesn't yet exist"
+              trigger = "config: model found for a resouce called *"
               activity = "file: created app/controllers/posts_controller.rb"
-              @notifications << [trigger, activity]
+              @notifications << [trigger, activity]              
+              
             end
-
-            # if the model fields are defined let's generate the model
-            model = child.element('model_class')
-            next unless model
-
-            class_name = model.attributes[:class_name]
-            next unless class_name
-
-            attributes = model.xpath('.').map {|x| x.attributes.values}
-
-            next if attributes.empty?
-
-            s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
-
-            command = "rails generate model %s" % s
-            puts ":: preparing to execute shell command: `#{command}`"
-            puts 'Are you sure you want to generate a model? (Y/n)'
-
-            r = shell command
-            next if r == :abort
-
-            trigger = "config: a new model with associated entries has "\
-                                                              + "been found"
-            activity = "file: created app/models/#{class_name.downcase}.rb"
-            @notifications << [trigger, activity]
-
             # -- next command ---------------------
 
             command = "rake db:migrate"     

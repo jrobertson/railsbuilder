@@ -298,9 +298,13 @@ class RailsBuilder
               else
 
                 unless File.exists? view_file then
+                  
+                  actions = child.xpath('resource_cv_av') do |x| 
+                    x.attributes[:captures0]
+                  end.join(' ')
 
                   command = "rails generate controller %s %s" % 
-                                                          [resource, action]
+                                                          [resource, actions]
                   puts ":: preparing to execute shell command: `#{command}`"
                   puts 'Are you sure you want to generate a ' \
                                                 + 'controller action? (Y/n)'
