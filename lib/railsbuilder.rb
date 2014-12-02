@@ -19,6 +19,8 @@ class RailsBuilder
 
     @config = RXFHelper.read(s)[0].gsub(/^(\s{,5})#/,'\1;') if s
     @tmp_path = @journal = journal == true ? Dir.tmpdir : journal  if journal
+    
+            #[:model_class, /(\w+):\s*(string|text|decimal)\s*,?(?<options>.*)/, :class_attribute],    
 
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
@@ -28,7 +30,7 @@ class RailsBuilder
       [:root, ':resource', :resource],
         [:resource, 'model', :model],
           [:model, ':class_name', :model_class],
-            [:model_class, /(\w+):\s*(string|text)/, :class_attribute],
+            [:model_class, /^(?<name>\w+):\s*(?<type>string|text|decimal)\s*,?(?<options>.*)/, :class_attribute],
         [:resource, /(?:controller \+ views|actionpack:)/, :resource_cv],
           [:resource_cv, /(\w+)(?:\s+([av]{1,2}))?/, :resource_cv_av],
             [:resource_cv_av, /(markdown):\s*(.*)/, :renderer],
@@ -72,7 +74,7 @@ class RailsBuilder
     @app_path = app_path = doc.element('app_path/@app_path') || 
                                            File.join(@parent_path, app)
 
-    puts 'changing director to ' + app_path.inspect
+    puts 'changing directory to ' + app_path.inspect
     Dir.chdir app_path
 
     # select the :resource records
@@ -159,11 +161,13 @@ class RailsBuilder
               class_name = model.attributes[:class_name]
               next unless class_name
 
-              attributes = model.xpath('.').map {|x| x.attributes.values}
+              #attributes = model.xpath('.').map {|x| x.attributes.values}
+              attributes = model.xpath('.').map {|x| field_attributes x}
 
               next if attributes.empty?
 
-              s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')
+              s = class_name + ' ' + attributes\
+                            .map{|h| "%s: %s" % [h[:name], h[:type]]}.join(' ')
 
               command = "rails generate model %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
@@ -185,11 +189,12 @@ class RailsBuilder
               class_name = model.attributes[:class_name]
               next unless class_name
 
-              attributes = model.xpath('.').map {|x| x.attributes.values}
+              attributes = model.xpath('.').map {|x| field_attributes x}
 
               next if attributes.empty?
 
-              s = class_name + ' ' + attributes.map{|x| x.join ':'}.join(' ')                            
+              s = class_name + ' ' + attributes\
+                            .map{|h| "%s: %s" % [h[:name], h[:type]]}.join(' ')
 
               command = "rails generate scaffold %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
@@ -391,6 +396,20 @@ class RailsBuilder
 
   private
 
+  def field_attributes(e)
+
+    h = {
+      name: e.attributes[:name],
+      type: e.attributes[:type],
+    }
+    raw_opt = e.attributes[:options]
+    if raw_opt.length > 0 then
+      h[:options] = raw_opt.split(/\s*,?\s*\b(?=\w+:)/)[1..-1]\
+          .map {|x| x.split(':',2).map(&:lstrip)}
+    end
+    h  
+  end  
+  
   def parse(patterns, s=nil)
 
     if s.nil? then
