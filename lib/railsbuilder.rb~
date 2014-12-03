@@ -167,7 +167,7 @@ class RailsBuilder
               next if attributes.empty?
 
               s = class_name + ' ' + attributes\
-                            .map{|h| "%s: %s" % [h[:name], h[:type]]}.join(' ')
+                            .map{|h| "%s:%s" % [h[:name], h[:type].to_s]}.join(' ')
 
               command = "rails generate model %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
@@ -194,7 +194,7 @@ class RailsBuilder
               next if attributes.empty?
 
               s = class_name + ' ' + attributes\
-                            .map{|h| "%s: %s" % [h[:name], h[:type]]}.join(' ')
+                            .map{|h| "%s: %s" % [h[:name], h[:type].to_s]}.join(' ')
 
               command = "rails generate scaffold %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
@@ -400,7 +400,7 @@ class RailsBuilder
 
     h = {
       name: e.attributes[:name],
-      type: e.attributes[:type],
+      type: e.attributes[:type].to_sym,
     }
     raw_opt = e.attributes[:options]
     if raw_opt.length > 0 then
