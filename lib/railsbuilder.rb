@@ -481,7 +481,7 @@ EOF
     FileUtils.mkdir_p snapshot_path
 
     FileUtils.copy_entry @app_path, snapshot_path, preserve=true
-    al = ActivityLogger.new File.join(@tmp_path, 'railsbuilder', @app)
+    al = ActivityLogger.new dir: File.join(@tmp_path, 'railsbuilder', @app)
     s = File.join(d,t)
     s << '; ' + desc if desc
     al.create s

@@ -20,8 +20,6 @@ class RailsBuilder
     @config = RXFHelper.read(s)[0].gsub(/^(\s{,5})#/,'\1;') if s
     @tmp_path = @journal = journal == true ? Dir.tmpdir : journal  if journal
     
-            #[:model_class, /(\w+):\s*(string|text|decimal)\s*,?(?<options>.*)/, :class_attribute],    
-
     patterns = [
       [:root, 'app_path: :app_path', :app_path],
       [:root, 'app: :app', :app],
@@ -30,7 +28,9 @@ class RailsBuilder
       [:root, ':resource', :resource],
         [:resource, 'model', :model],
           [:model, ':class_name', :model_class],
-            [:model_class, /^(?<name>\w+):\s*(?<type>string|text|decimal)\s*,?(?<options>.*)/, :class_attribute],
+            [:model_class, 
+/^(?<name>\w+):\s*(?<type>string|text|decimal)\s*,?(?<options>.*)/,
+                                                          :class_attribute],
         [:resource, /(?:controller \+ views|actionpack:)/, :resource_cv],
           [:resource_cv, /(\w+)(?:\s+([av]{1,2}))?/, :resource_cv_av],
             [:resource_cv_av, /(markdown):\s*(.*)/, :renderer],
@@ -194,7 +194,7 @@ class RailsBuilder
               next if attributes.empty?
 
               s = class_name + ' ' + attributes\
-                            .map{|h| "%s: %s" % [h[:name], h[:type].to_s]}.join(' ')
+                            .map{|h| "%s:%s" % [h[:name], h[:type].to_s]}.join(' ')
 
               command = "rails generate scaffold %s" % s
               puts ":: preparing to execute shell command: `#{command}`"
@@ -205,6 +205,29 @@ class RailsBuilder
               trigger = "config: model found for a resouce called *"
               activity = "file: created app/controllers/posts_controller.rb"
               @notifications << [trigger, activity]              
+              
+              # check to see if the class attributes contains options
+
+              attributes_contain_options = attributes\
+                                              .select {|x| x[:options]}
+              
+              if attributes_contain_options then
+                
+                Dir.chdir File.join(app_path,%w(db migrate))
+
+                filename = Dir.glob('*.rb').first
+                s = File.read filename
+                
+                attributes_contain_options.each do |x|
+
+                  options = x[:options].map {|y| y.join(': ')}.join(', ')
+                  s.sub!(/t\.#{x[:type].to_s}\s+:#{x[:name]}/,'\0, ' + options)
+                  
+                end                
+
+                File.write filename, s
+                Dir.chdir app_path
+              end
               
             end
             # -- next command ---------------------
